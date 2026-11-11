@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inventari PPA - Torreferrussa</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=2">
+    <meta name="theme-color" content="#1d4ed8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe',
+                            300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6',
+                            600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        #signatureCanvas { touch-action: none; }
+        body { background-color: #f8fafc; }
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        .welcome-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #fff;
+            padding: 16px 24px max(24px, env(safe-area-inset-bottom));
+        }
+        .welcome-screen[hidden] { display: none; }
+        .welcome-image { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+        .welcome-enter {
+            flex-shrink: 0;
+            width: 100%;
+            max-width: 360px;
+            margin-top: 16px;
+            padding: 16px 24px;
+            border: 0;
+            border-radius: 12px;
+            background: #1d4ed8;
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .welcome-enter:hover { background: #1e40af; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <section id="welcomeScreen" class="welcome-screen" aria-label="Benvinguda a l'inventari de Torreferrussa">
+        <img src="assets/benvinguda-tragsa.jpg" alt="Grupo Tragsa" class="welcome-image" fetchpriority="high">
+        <button id="enterInventory" type="button" class="welcome-enter" autofocus>Entrar a l'inventari</button>
+    </section>
+
+    <header inert class="bg-brand-700 text-white p-4 shadow-md sticky top-0 z-20 h-[68px]">
+        <div class="max-w-md mx-auto flex items-center gap-3">
+            <img src="assets/logo-torreferrussa.jpg" alt="Logo de Torreferrussa" width="200" height="200" class="h-12 w-12 shrink-0 rounded-lg bg-white object-contain">
+            <h1 class="text-lg sm:text-xl font-bold leading-tight">Inventari PPA - Torreferrussa</h1>
+        </div>
+    </header>
+
+    <main inert class="flex-grow p-4 max-w-md mx-auto w-full pb-24">
+        
+        <div id="loadingOverlay" class="fixed inset-0 bg-white/80 z-50 flex flex-col items-center justify-center hidden">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-700 mb-4"></div>
+            <p class="text-lg font-semibold text-brand-800" id="loadingText">Guardant inventari...</p>
+        </div>
+
+        <div id="successScreen" class="hidden flex flex-col items-center justify-center py-12 text-center">
+            <div class="w-20 h-20 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Inventari desat!</h2>
+            <p class="text-slate-600 mb-8">Dades i firma enviades correctament.</p>
+            <button onclick="resetForm()" class="bg-brand-600 text-white font-semibold py-3 px-8 rounded-xl shadow hover:bg-brand-700 transition w-full max-w-xs">
+                Fer un altre inventari
+            </button>
+        </div>
+
+        <div id="formContainer" class="space-y-6">
+            
+            <div id="errorBanner" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <span class="block sm:inline" id="errorMessage">Error.</span>
+            </div>
+
+            <section class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                <h2 class="text-lg font-semibold mb-4 text-slate-700 border-b pb-2">Dades de la sessió</h2>
+                <div class="mb-4">
+                    <label for="workerName" class="block text-sm font-medium text-slate-700 mb-1">Nom del Treballador</label>
+                    <input type="text" id="workerName" oninput="saveToLocal()" placeholder="Escriu el teu nom" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition" required>
+                </div>
+                <div>
+                    <label for="inventoryDate" class="block text-sm font-medium text-slate-700 mb-1">Data i Hora</label>
+                    <input type="datetime-local" id="inventoryDate" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition" required>
+                </div>
+            </section>
+
+            <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 relative">
+                
+                <!-- CERCADOR -->
+                <div class="mb-4 relative">
+                    <input type="search" id="searchBar" oninput="filterProducts()" aria-label="Cerca material o categoria" placeholder="🔍 Cerca material o categoria..." class="w-full p-3 pl-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition shadow-sm text-base">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" aria-hidden="true">
+                        <span class="text-slate-400">🔍</span>
+                    </div>
+                </div>
+
+                <div id="productList" class="space-y-3"></div>
+            </section>
+
+            <section class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-3 border-b pb-2">
+                    <h2 class="text-lg font-semibold text-slate-700">Firma del treballador</h2>
+                    <button id="clearSigBtn" class="text-sm text-red-500 hover:text-red-700 font-medium">Netejar firma</button>
+                </div>
+                <div class="border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 overflow-hidden relative touch-none">
+                    <span id="sigPlaceholder" class="absolute inset-0 flex items-center justify-center text-slate-400 pointer-events-none">Firma aquí...</span>
+                    <canvas id="signatureCanvas" class="w-full h-40 cursor-crosshair block"></canvas>
+                </div>
+            </section>
+
+            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-30">
+                <div class="max-w-md mx-auto">
+                    <button id="saveInventoryBtn" class="w-full bg-brand-600 text-white text-lg font-bold py-4 px-6 rounded-xl shadow-lg hover:bg-brand-700 active:scale-95 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                        Guardar i Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.getElementById('enterInventory').addEventListener('click', () => {
+            document.getElementById('welcomeScreen').hidden = true;
+            document.querySelector('header').removeAttribute('inert');
+            document.querySelector('main').removeAttribute('inert');
+            document.getElementById('workerName').focus();
+        });
+
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyXDRhJyRf5nF_xHikgFMflGHzvxCBhs8Y0rZiMmjs992LcCGWmr4Iv5TZTMPyTqV6M/exec";
+
+        let isSigning = false;
+        let hasSigned = false;
+
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const errorBanner = document.getElementById('errorBanner');
+        const errorMessage = document.getElementById('errorMessage');
+        const formContainer = document.getElementById('formContainer');
+        const successScreen = document.getElementById('successScreen');
+        const dateInput = document.getElementById('inventoryDate');
+        const canvas = document.getElementById('signatureCanvas');
+        const ctx = canvas.getContext('2d');
+        const sigPlaceholder = document.getElementById('sigPlaceholder');
+
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        dateInput.value = now.toISOString().slice(0, 16);
+
+        function showLoading(text) {
+            loadingText.textContent = text;
+            loadingOverlay.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorBanner.classList.remove('hidden');
+            setTimeout(() => { errorBanner.classList.add('hidden'); }, 10000);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        const inventoryCategories = [
+            {
+                name: "1. EPIS",
+                items: [
+                    "Granota un sol ús TALLA S", "Granota un sol ús TALLA M", "Granota un sol ús TALLA L",
+                    "Granota un sol ús TALLA XL", "Granota un sol ús TALLA XXL", "Granota un sol ús TALLA XXXL",
+                    "Guants nitril TALLA S", "Guants nitril TALLA M", "Guants nitril TALLA L", "Guants nitril TALLA XL",
+                    "Botes de seguretat TALLA 38", "Botes de seguretat TALLA 39", "Botes de seguretat TALLA 40",
+                    "Botes de seguretat TALLA 41", "Botes de seguretat TALLA 42", "Botes de seguretat TALLA 43",
+                    "Botes de seguretat TALLA 44", "Botes de seguretat TALLA 45", "Botes de seguretat TALLA 46",
+                    "Botes de seguretat TALLA 47", "Botes de seguretat TALLA 48",
+                    "Armilles reflectants Tragsa", "Ulleres de seguretat",
+                    "Taps d'oïdes", "Peücs", "Mascareta FFP2"
+                ]
+            },
+            { name: "2. Camp", items: ["Cinta americana", "Aigüa 1,5L", "Taps de menthol nas", "Brides"] },
+            { name: "3. Primers Auxilis", items: ["Farmacioles", "Desinfectant de mans (antiseptic)", "Repelent GOIBI", "Crema solar"] },
+            { name: "4. Neteja i Higiene", items: ["Sabó de mans", "Sepiolita sacs 25kg", "Rotllos de paper industrial", "Desinfectant 30L"] },
+            { name: "5. Cadàvers", items: ["Bosses cadàvers 135x200 (verdes)", "Bosses cadàvers 70x110 cm (petites)"] },
+            { name: "6. Eines i Maquinària", items: ["Pales"] },
+            { name: "7. Gestió de residus", items: ["Bosses d'escombraries 50L (65x70)"] },
+            { name: "8. Mostres", items: ["Bosses extracció canina"] }
+        ];
+
+        let inventoryCounts = {};
+        let touchedProducts = {};
+        let flatProductsList = [];
+
+        function renderProducts() {
+            const container = document.getElementById('productList');
+            container.innerHTML = '';
+            
+            inventoryCategories.forEach((category, catIdx) => {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'category-section relative';
+
+                const catHeader = document.createElement('h3');
+                catHeader.className = "category-header sticky top-[68px] z-10 bg-white/95 backdrop-blur text-md font-bold text-slate-800 py-3 border-b-2 border-brand-200 shadow-[0_4px_6px_-4px_rgba(0,0,0,0.1)] -mx-4 px-4 mb-3";
+                catHeader.textContent = category.name;
+                sectionDiv.appendChild(catHeader);
+
+                category.items.forEach((itemName, itemIdx) => {
+                    const id = `prod_${catIdx}_${itemIdx}`;
+                    flatProductsList.push({ id: id, name: itemName, category: category.name });
+                    
+                    if (inventoryCounts[id] === undefined) {
+                        inventoryCounts[id] = null;
+                    }
+                    
+                    const initialLetter = itemName.charAt(0).toUpperCase();
+
+                    const div = document.createElement('div');
+                    div.className = "product-item flex flex-wrap items-center justify-between gap-2 p-3 border border-slate-200 rounded-lg bg-slate-50 mb-3 shadow-sm transition-all";
+                    div.setAttribute('data-name', itemName.toLowerCase());
+                    div.setAttribute('data-category', category.name.toLowerCase());
+                    
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3 min-w-[180px] flex-1">
+                            <div class="w-10 h-10 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-lg border border-brand-200 shrink-0">
+                                ${initialLetter}
+                            </div>
+                            <h4 class="font-medium text-slate-800 text-sm leading-tight pr-2">${itemName}</h4>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0 ml-auto">
+                            <button type="button" onclick="updateQty('${id}', -1)" class="w-10 h-10 bg-white border border-slate-300 rounded-full flex items-center justify-center text-2xl font-bold text-slate-600 hover:bg-slate-100 active:bg-slate-200 shadow-sm select-none">-</button>
+                            <input type="number" id="qty_${id}" oninput="manualQtyUpdate('${id}')" placeholder="-" class="w-14 h-10 text-center font-bold text-lg bg-white border border-slate-300 rounded-md p-0 focus:ring-2 focus:ring-brand-500 outline-none transition" value="" min="0">
+                            <button type="button" onclick="updateQty('${id}', 1)" class="w-10 h-10 bg-brand-100 border border-brand-300 rounded-full flex items-center justify-center text-2xl font-bold text-brand-700 hover:bg-brand-200 active:bg-brand-300 shadow-sm select-none">+</button>
+                        </div>
+                    `;
+                    sectionDiv.appendChild(div);
+                });
+                container.appendChild(sectionDiv);
+            });
+            
+            loadFromLocal();
+        }
+
+        window.filterProducts = function() {
+            const query = document.getElementById('searchBar').value.toLowerCase();
+            const categories = document.querySelectorAll('.category-section');
+
+            categories.forEach(cat => {
+                let hasVisibleItems = false;
+                const items = cat.querySelectorAll('.product-item');
+
+                items.forEach(item => {
+                    const name = item.getAttribute('data-name');
+                    const category = item.getAttribute('data-category');
+                    if (name.includes(query) || category.includes(query)) {
+                        item.style.display = 'flex';
+                        hasVisibleItems = true;
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+
+                const header = cat.querySelector('.category-header');
+                if (hasVisibleItems) {
+                    header.style.display = 'block';
+                } else {
+                    header.style.display = 'none';
+                }
+            });
+        };
+
+        function triggerVibrate() {
+            if (navigator.vibrate) {
+                navigator.vibrate(40);
+            }
+        }
+
+        window.saveToLocal = function() {
+            const dataToSave = {
+                counts: inventoryCounts,
+                touched: touchedProducts,
+                name: document.getElementById('workerName').value
+            };
+            localStorage.setItem('inventariPPASaved', JSON.stringify(dataToSave));
+        };
+
+        function loadFromLocal() {
+            const saved = localStorage.getItem('inventariPPASaved');
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    inventoryCounts = data.counts || {};
+                    touchedProducts = data.touched || {};
+                    if (data.name) document.getElementById('workerName').value = data.name;
+                    
+                    for (let id in inventoryCounts) {
+                        const val = inventoryCounts[id];
+                        const input = document.getElementById(`qty_${id}`);
+                        if (input && val !== null) {
+                            input.value = val;
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+
+        window.updateQty = function(id, change) {
+            triggerVibrate();
+            let current = inventoryCounts[id];
+            if (current === null) current = 0;
+            
+            let newVal = current + change;
+            if (newVal < 0) newVal = 0; 
+            
+            inventoryCounts[id] = newVal;
+            touchedProducts[id] = true; 
+            document.getElementById(`qty_${id}`).value = newVal;
+            saveToLocal();
+        };
+
+        window.manualQtyUpdate = function(id) {
+            triggerVibrate();
+            let el = document.getElementById(`qty_${id}`);
+            if (el.value === "") {
+                inventoryCounts[id] = null;
+            } else {
+                let val = parseInt(el.value, 10);
+                if (isNaN(val) || val < 0) val = 0;
+                inventoryCounts[id] = val;
+            }
+            touchedProducts[id] = true;
+            saveToLocal();
+        };
+
+        renderProducts();
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = '#1e293b';
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function startDrawing(e) {
+            isSigning = true; hasSigned = true; sigPlaceholder.style.display = 'none';
+            const pos = getPos(e); ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+            if(e.cancelable) e.preventDefault();
+        }
+
+        function draw(e) {
+            if (!isSigning) return; const pos = getPos(e); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+            if(e.cancelable) e.preventDefault();
+        }
+
+        function stopDrawing() { isSigning = false; }
+
+        canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing); canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('touchstart', startDrawing, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+
+        document.getElementById('clearSigBtn').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hasSigned = false; sigPlaceholder.style.display = 'flex';
+        });
+
+        window.submitForm = async function() {
+            const workerName = document.getElementById('workerName').value.trim();
+            const date = document.getElementById('inventoryDate').value;
+
+            const itemsToSave = flatProductsList
+                .filter(p => inventoryCounts[p.id] !== null && touchedProducts[p.id])
+                .map(p => ({
+                    nom: p.name,
+                    categoria: p.category,
+                    unitats: inventoryCounts[p.id]
+                }));
+
+            if (!workerName) { showError("Si us plau, introdueix el teu nom."); return; }
+            if (!date) { showError("Si us plau, introdueix la data i hora."); return; }
+            if (itemsToSave.length === 0) { showError("Has d'indicar la quantitat d'almenys un producte."); return; }
+            if (!hasSigned) { showError("És necessari firmar abans de guardar."); return; }
+
+            const signatureBase64 = canvas.toDataURL('image/png');
+            const payload = {
+                treballador: workerName,
+                data: date,
+                productes: itemsToSave,
+                firma: signatureBase64
+            };
+
+            showLoading("Connectant amb l'Excel...");
+
+            try {
+                const resposta = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                
+                const textResposta = await resposta.text();
+                
+                try {
+                    const resultat = JSON.parse(textResposta);
+                    if(resultat.status === "èxit") {
+                        hideLoading();
+                        localStorage.removeItem('inventariPPASaved');
+                        
+                        formContainer.classList.add('hidden');
+                        successScreen.classList.remove('hidden');
+                    } else {
+                        throw new Error("ERROR AL CODI D'APPS SCRIPT: " + resultat.missatge);
+                    }
+                } catch (e) {
+                    throw new Error("ERROR AL LLEGIR LA RESPOSTA: " + e.message);
+                }
+            } catch (error) {
+                console.error("Error al guardar:", error);
+                hideLoading();
+                showError(error.message || "Error desconegut de connexió.");
+            }
+        };
+
+        document.getElementById('saveInventoryBtn').addEventListener('click', submitForm);
+
+        window.resetForm = function() {
+            document.getElementById('workerName').value = '';
+            document.getElementById('searchBar').value = '';
+            filterProducts(); 
+            
+            flatProductsList.forEach(p => {
+                inventoryCounts[p.id] = null;
+                const input = document.getElementById(`qty_${p.id}`);
+                if(input) input.value = "";
+            });
+            touchedProducts = {};
+            localStorage.removeItem('inventariPPASaved');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hasSigned = false;
+            sigPlaceholder.style.display = 'flex';
+            
+            const nDate = new Date();
+            nDate.setMinutes(nDate.getMinutes() - nDate.getTimezoneOffset());
+            dateInput.value = nDate.toISOString().slice(0, 16);
+
+            successScreen.classList.add('hidden');
+            formContainer.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
