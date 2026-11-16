@@ -58,6 +58,23 @@
         }
         .welcome-enter:hover { background: #1e40af; }
     </style>
+
+    <!-- CODI DE ONESIGNAL (Afegeix les notificacions push) -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "83e6c8aa-b304-4dd6-b370-c3faa47157ff",
+          safari_web_id: "web.onesignal.auto.50aab334-fdef-4f2b-a12a-95c1e616813d",
+          notifyButton: {
+            enable: true,
+          },
+        });
+      });
+    </script>
+    <!-- FINAL DEL CODI DE ONESIGNAL -->
+
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
 
