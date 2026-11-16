@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inventari-trf-v10';
+const CACHE_NAME = 'inventari-trf-v12';
 const urlsToCache = [
   '/Inventari-Torreferrussa/',
   '/Inventari-Torreferrussa/index.html',
