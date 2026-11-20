@@ -97,6 +97,38 @@
             <p class="text-lg font-semibold text-brand-800" id="loadingText">Guardant inventari...</p>
         </div>
 
+        <!-- MODAL DE RESUM ABANS D'ENVIAR -->
+        <div id="summaryModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="summaryTitle">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden">
+                <div class="p-4 bg-brand-700 text-white flex justify-between items-center">
+                    <h2 id="summaryTitle" class="text-lg font-bold">Revisió abans d'enviar</h2>
+                    <span id="summaryCountBadge" class="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">0 articles</span>
+                </div>
+                <div class="p-4 overflow-y-auto flex-1 space-y-4">
+                    <div class="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1">
+                        <p><span class="font-semibold text-slate-800">Treballador:</span> <span id="summaryWorker"></span></p>
+                        <p><span class="font-semibold text-slate-800">Data:</span> <span id="summaryDate"></span></p>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Material comptat</h3>
+                        <ul id="summaryList" class="divide-y divide-slate-100 border border-slate-200 rounded-lg bg-white"></ul>
+                    </div>
+                    <div id="summaryObsContainer" class="hidden">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Observacions</h3>
+                        <p id="summaryObsText" class="text-sm text-slate-700 bg-amber-50 border border-amber-200 p-3 rounded-lg whitespace-pre-wrap"></p>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-200 bg-slate-50 flex gap-3">
+                    <button type="button" id="cancelSummaryBtn" class="flex-1 py-3 px-4 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-100 transition">
+                        Revisar
+                    </button>
+                    <button type="button" id="confirmSendBtn" class="flex-1 py-3 px-4 rounded-xl bg-brand-600 text-white font-bold shadow hover:bg-brand-700 active:scale-95 transition">
+                        Confirmar i Enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="successScreen" class="hidden flex flex-col items-center justify-center py-12 text-center">
             <div class="w-20 h-20 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mb-6">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -139,6 +171,12 @@
                 </div>
 
                 <div id="productList" class="space-y-3"></div>
+            </section>
+
+            <!-- OBSERVACIONS / INCIDÈNCIES -->
+            <section class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
+                <h2 class="text-lg font-semibold mb-3 text-slate-700 border-b pb-2">Observacions / Incidències <span class="text-xs font-normal text-slate-400">(Opcional)</span></h2>
+                <textarea id="observations" oninput="saveToLocal()" rows="3" placeholder="Ex: Caixa de guants talla M mullada, material reservat per demà..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition text-sm resize-y"></textarea>
             </section>
 
             <section class="bg-white p-5 rounded-xl shadow-sm border border-slate-100">
@@ -213,6 +251,7 @@
 
         let isSigning = false;
         let hasSigned = false;
+        let pendingPayload = null;
 
         const loadingOverlay = document.getElementById('loadingOverlay');
         const loadingText = document.getElementById('loadingText');
@@ -224,6 +263,7 @@
         const canvas = document.getElementById('signatureCanvas');
         const ctx = canvas.getContext('2d');
         const sigPlaceholder = document.getElementById('sigPlaceholder');
+        const summaryModal = document.getElementById('summaryModal');
 
         const now = new Date();
         now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -273,9 +313,24 @@
         let touchedProducts = {};
         let flatProductsList = [];
 
+        // Marcatge visual dels productes comptats
+        function updateCardStyle(id) {
+            const card = document.getElementById(`card_${id}`);
+            if (!card) return;
+            const isCounted = inventoryCounts[id] !== null && touchedProducts[id];
+            if (isCounted) {
+                card.classList.remove('border-slate-200', 'bg-slate-50');
+                card.classList.add('border-brand-500', 'bg-brand-50/70', 'ring-1', 'ring-brand-300');
+            } else {
+                card.classList.add('border-slate-200', 'bg-slate-50');
+                card.classList.remove('border-brand-500', 'bg-brand-50/70', 'ring-1', 'ring-brand-300');
+            }
+        }
+
         function renderProducts() {
             const container = document.getElementById('productList');
             container.innerHTML = '';
+            flatProductsList = [];
             
             inventoryCategories.forEach((category, catIdx) => {
                 const sectionDiv = document.createElement('div');
@@ -297,6 +352,7 @@
                     const initialLetter = itemName.charAt(0).toUpperCase();
 
                     const div = document.createElement('div');
+                    div.id = `card_${id}`;
                     div.className = "product-item flex flex-wrap items-center justify-between gap-2 p-3 border border-slate-200 rounded-lg bg-slate-50 mb-3 shadow-sm transition-all";
                     div.setAttribute('data-name', itemName.toLowerCase());
                     div.setAttribute('data-category', category.name.toLowerCase());
@@ -360,7 +416,8 @@
             const dataToSave = {
                 counts: inventoryCounts,
                 touched: touchedProducts,
-                name: document.getElementById('workerName').value
+                name: document.getElementById('workerName').value,
+                observations: document.getElementById('observations').value
             };
             localStorage.setItem('inventariPPASaved', JSON.stringify(dataToSave));
         };
@@ -373,6 +430,7 @@
                     inventoryCounts = data.counts || {};
                     touchedProducts = data.touched || {};
                     if (data.name) document.getElementById('workerName').value = data.name;
+                    if (data.observations) document.getElementById('observations').value = data.observations;
                     
                     for (let id in inventoryCounts) {
                         const val = inventoryCounts[id];
@@ -380,6 +438,7 @@
                         if (input && val !== null) {
                             input.value = val;
                         }
+                        updateCardStyle(id);
                     }
                 } catch(e) {}
             }
@@ -396,6 +455,7 @@
             inventoryCounts[id] = newVal;
             touchedProducts[id] = true; 
             document.getElementById(`qty_${id}`).value = newVal;
+            updateCardStyle(id);
             saveToLocal();
         };
 
@@ -404,12 +464,14 @@
             let el = document.getElementById(`qty_${id}`);
             if (el.value === "") {
                 inventoryCounts[id] = null;
+                touchedProducts[id] = false;
             } else {
                 let val = parseInt(el.value, 10);
                 if (isNaN(val) || val < 0) val = 0;
                 inventoryCounts[id] = val;
+                touchedProducts[id] = true;
             }
-            touchedProducts[id] = true;
+            updateCardStyle(id);
             saveToLocal();
         };
 
@@ -457,9 +519,11 @@
             hasSigned = false; sigPlaceholder.style.display = 'flex';
         });
 
-        window.submitForm = async function() {
+        // Pas 1: Validar i obrir la pantalla de resum
+        window.openSummaryModal = function() {
             const workerName = document.getElementById('workerName').value.trim();
             const date = document.getElementById('inventoryDate').value;
+            const observations = document.getElementById('observations').value.trim();
 
             const itemsToSave = flatProductsList
                 .filter(p => inventoryCounts[p.id] !== null && touchedProducts[p.id])
@@ -475,19 +539,51 @@
             if (!hasSigned) { showError("És necessari firmar abans de guardar."); return; }
 
             const signatureBase64 = canvas.toDataURL('image/png');
-            const payload = {
+            pendingPayload = {
                 treballador: workerName,
                 data: date,
+                observacions: observations,
                 productes: itemsToSave,
                 firma: signatureBase64
             };
 
+            document.getElementById('summaryWorker').textContent = workerName;
+            document.getElementById('summaryDate').textContent = date.replace('T', ' ');
+            document.getElementById('summaryCountBadge').textContent = `${itemsToSave.length} ${itemsToSave.length === 1 ? 'article' : 'articles'}`;
+
+            const summaryList = document.getElementById('summaryList');
+            summaryList.innerHTML = '';
+            itemsToSave.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between items-center p-2.5 text-sm gap-2';
+                li.innerHTML = `
+                    <span class="text-slate-700 leading-snug">${item.nom.trim()}</span>
+                    <span class="font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-md shrink-0">${item.unitats}</span>
+                `;
+                summaryList.appendChild(li);
+            });
+
+            const obsContainer = document.getElementById('summaryObsContainer');
+            if (observations) {
+                document.getElementById('summaryObsText').textContent = observations;
+                obsContainer.classList.remove('hidden');
+            } else {
+                obsContainer.classList.add('hidden');
+            }
+
+            summaryModal.classList.remove('hidden');
+        };
+
+        // Pas 2: Enviar realment en confirmar al modal
+        window.confirmAndSend = async function() {
+            if (!pendingPayload) return;
+            summaryModal.classList.add('hidden');
             showLoading("Connectant amb l'Excel...");
 
             try {
                 const resposta = await fetch(WEB_APP_URL, {
                     method: 'POST',
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(pendingPayload)
                 });
                 
                 const textResposta = await resposta.text();
@@ -496,6 +592,7 @@
                     const resultat = JSON.parse(textResposta);
                     if(resultat.status === "èxit") {
                         hideLoading();
+                        pendingPayload = null;
                         localStorage.removeItem('inventariPPASaved');
                         
                         formContainer.classList.add('hidden');
@@ -513,17 +610,24 @@
             }
         };
 
-        document.getElementById('saveInventoryBtn').addEventListener('click', submitForm);
+        document.getElementById('saveInventoryBtn').addEventListener('click', openSummaryModal);
+        document.getElementById('cancelSummaryBtn').addEventListener('click', () => {
+            summaryModal.classList.add('hidden');
+        });
+        document.getElementById('confirmSendBtn').addEventListener('click', confirmAndSend);
 
         window.resetForm = function() {
             document.getElementById('workerName').value = '';
             document.getElementById('searchBar').value = '';
+            document.getElementById('observations').value = '';
             filterProducts(); 
             
             flatProductsList.forEach(p => {
                 inventoryCounts[p.id] = null;
                 const input = document.getElementById(`qty_${p.id}`);
                 if(input) input.value = "";
+                touchedProducts[p.id] = false;
+                updateCardStyle(p.id);
             });
             touchedProducts = {};
             localStorage.removeItem('inventariPPASaved');
